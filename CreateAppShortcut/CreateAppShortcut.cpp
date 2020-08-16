@@ -6,6 +6,7 @@
 #include <string>
 #include <iostream>
 #include <wrl/client.h>
+#include <wrl/wrappers/corewrappers.h>
 #include <conio.h>
 
 using namespace Microsoft::WRL;
@@ -53,14 +54,15 @@ typedef std::unique_ptr<__unaligned ITEMIDLIST, FreeIdList> IDListPtr;
 
 int wmain(int argc, wchar_t* argv[])
 {
+    Wrappers::RoInitializeWrapper _{ RO_INIT_SINGLETHREADED };
 
     std::wstring appName{};
     if (argc > 1)
     {
         if (*argv[1] == L'/' || *argv[1] == L'-')
         {
-            std::wcout << L"Usage: mkapplnk [appname-substring [output-file] ]" << std::endl;
             std::wcout << L"Creates shortcuts to any app in the apps folder, including UWP / MSIX apps." << std::endl;
+            std::wcout << L"Usage: mkapplnk [appname [output-file] ]" << std::endl;
             return exit_usage;
         }
 
@@ -78,8 +80,6 @@ int wmain(int argc, wchar_t* argv[])
     }
 
     std::wcout << L"Searching for '" << appName << "' . . ." << std::endl;
-
-    check(RoInitialize(RO_INIT_SINGLETHREADED));
 
     // Get the Desktop folder; this is the root of all shell folders.
     ComPtr<IShellFolder> desktopFolder{ nullptr };
