@@ -28,9 +28,9 @@ void check(HRESULT hr)
     exit(exit_runtime_error);
 }
 
-const wchar_t* GetPropertyStringRef(IPropertyStore* store, const PROPERTYKEY& key)
+std::wstring GetPropertyString(IPropertyStore* store, const PROPERTYKEY& key)
 {
-    static wchar_t buffer[MAX_PATH];
+    wchar_t buffer[MAX_PATH];
     PROPVARIANT var{};
     PropVariantInit(&var);
 
@@ -94,7 +94,7 @@ int wmain(int argc, wchar_t* argv[])
     ComPtr<IShellFolder2> appsKnownFolderShellFolder{ nullptr };
     check(desktopFolder->BindToObject(appsKnownFolderIDList.get(), nullptr, IID_PPV_ARGS(&appsKnownFolderShellFolder)));
 
-    wchar_t foundAppName[MAX_PATH]{ 0 };
+    std::wstring foundAppName{};
     IDListPtr foundAppAbsoluteIDList{ nullptr };
 
     // Enumerate all the children of the AppsFolder.
@@ -113,20 +113,19 @@ int wmain(int argc, wchar_t* argv[])
         check(propertyStoreFactoryForChild->GetPropertyStore(GPS_DEFAULT, nullptr, IID_PPV_ARGS(&propertyStoreForChild)));
 
         // Get the ItemNameDisplay property to see if it matches what the user asked for.
-        auto thisAppDisplayName{ GetPropertyStringRef(propertyStoreForChild.Get(), PKEY_ItemNameDisplay) };
-        if (StrStrIW(thisAppDisplayName, appName.c_str()) != nullptr)
+        std::wstring thisAppDisplayName{ GetPropertyString(propertyStoreForChild.Get(), PKEY_ItemNameDisplay) };
+        if (StrStrIW(thisAppDisplayName.c_str(), appName.c_str()) != nullptr)
         {
-            std::wcout << std::endl << L"Found '" << thisAppDisplayName << L"' (";
-            std::wcout << GetPropertyStringRef(propertyStoreForChild.Get(), PKEY_AppUserModel_ID) << L")." << std::endl;
+            std::wcout << std::endl << L"Found '" << thisAppDisplayName << L"' (" << GetPropertyString(propertyStoreForChild.Get(), PKEY_AppUserModel_ID) << L")." << std::endl;
             std::wcout << L"Use this app? [Y/N; blank for Y] ";
             auto answer{ toupper(_getwch()) };
             std::wcout << static_cast<wchar_t>(answer) << std::endl;
             if (answer != L'N')
             {
-                // The ITIDLIST we got is relative to the AppsFolder; we need an absolute ITEMIDLIST to save in the shortcut.
+                // The ITEMIDLIST we got is relative to the AppsFolder; we need an absolute ITEMIDLIST to save in the shortcut.
                 tempIDList = ILCombine(appsKnownFolderIDList.get(), childItemIDList.get());
                 foundAppAbsoluteIDList.reset(tempIDList);
-                wcscpy_s(foundAppName, thisAppDisplayName);
+                foundAppName = thisAppDisplayName;
                 break;
             }
         }
@@ -134,7 +133,7 @@ int wmain(int argc, wchar_t* argv[])
 
     std::wcout << std::endl;
 
-    if (wcslen(foundAppName) == 0)
+    if (foundAppName.length() == 0)
     {
         std::wcout << L"Did not find an app with that name." << std::endl;
         return exit_no_app;
@@ -147,19 +146,19 @@ int wmain(int argc, wchar_t* argv[])
     }
     else
     {
-        std::wcout << L"Filename to save as (<enter> to skip): ";
+        std::wcout << L"Filename to save as (<enter> to use app name): ";
         std::getline(std::wcin, fileName);
     }
 
     if (fileName.length() == 0)
     {
-        return exit_user_abort;
+        fileName = foundAppName + L".lnk";
     }
 
     // Create the IShellLink and set the ITEMIDLIST and name.
     ComPtr<IShellLinkW> shellLink{ nullptr };
     check(CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(shellLink.GetAddressOf())));
-    check(shellLink->SetDescription(foundAppName));
+    check(shellLink->SetDescription(foundAppName.c_str()));
     check(shellLink->SetIDList(foundAppAbsoluteIDList.get()));
 
     // Save the shortcut to the provided filename.
@@ -169,6 +168,6 @@ int wmain(int argc, wchar_t* argv[])
     check(file->Save(fileName.c_str(), FALSE));
 
     std::wcout << std::endl;
-    std::wcout << L"Success. Created shortcut to '" << foundAppName << L"' at " << fileName << L"." << std::endl;
+    std::wcout << L"Success. Created shortcut to '" << foundAppName << L"' at '" << fileName << L"'." << std::endl;
     return exit_success;
 }
